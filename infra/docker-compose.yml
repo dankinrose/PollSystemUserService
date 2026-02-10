@@ -1,0 +1,74 @@
+services:
+  user-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: main
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - ../resources/db-migrations:/docker-entrypoint-initdb.d/
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+
+  poll-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: poll_service
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - ../../PollSystemPollService/resources/db-migrations:/docker-entrypoint-initdb.d/
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+
+  user-service:
+    build:
+      context: ..
+    environment:
+      MYSQL_HOST: user-db
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: main
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      POLL_SERVICE_BASE_URL: http://poll-service:8081
+    ports:
+      - "8000:8000"
+    depends_on:
+      user-db:
+        condition: service_healthy
+    restart: on-failure
+
+
+  poll-service:
+    build:
+      context: ../../PollSystemPollService
+    environment:
+      MYSQL_HOST: poll-db
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: poll_service
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      USER_SERVICE_BASE_URL: http://user-service:8000
+    ports:
+      - "8081:8081"
+    depends_on:
+      poll-db:
+        condition: service_healthy
+    restart: on-failure
+
